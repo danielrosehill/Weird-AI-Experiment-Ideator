@@ -6,30 +6,118 @@ from .config import NUM_IDEAS
 def create_generation_task(agent) -> Task:
     """Create the idea generation task."""
     return Task(
-        description=f"""Generate {NUM_IDEAS} unique and creative AI experiment ideas.
+        description=f"""Generate {NUM_IDEAS} WEIRD, UNCONVENTIONAL AI experiment ideas.
 
-Each idea should:
-- Be distinct and avoid repetition with other ideas
-- Span different domains (art, science, entertainment, education, social experiments, etc.)
-- Include both simple and complex experiments
-- Cover various AI technologies (LLMs, computer vision, speech, robotics, multi-agent systems, etc.)
-- Be ethical, legal, and non-harmful
+IMPORTANT: DO NOT generate boring, predictable ideas like:
+- Chatbots for customer service
+- AI for productivity/scheduling
+- Personalized recommendations
+- Healthcare diagnostics
+- Educational tutors
+These are BANNED. If you catch yourself writing something like this, DELETE IT.
+
+Each idea MUST be:
+- WEIRD - something that makes people do a double-take
+- UNEXPECTED - not the obvious application of AI
+- MEMORABLE - something people would share and talk about
+- EXPERIMENTAL - pushing boundaries of what's "normal"
+
+Draw from domains like:
+- Absurdist art installations
+- Social experiments that reveal human nature
+- AI that intentionally fails in interesting ways
+- Posthuman and speculative futures
+- Glitch aesthetics and embracing errors
+- AI as performance art or ritual
+- Systems that are deliberately inefficient but beautiful
+- AI that generates meaning from nonsense
+- Experiments at the edge of creepy/fascinating
+- AI that explores liminal spaces, dreams, boredom
 
 For each idea, provide:
-1. **Title**: A catchy, descriptive name
-2. **Description**: What the experiment is and how it works
-3. **Implementation**: Technical approach and tools needed
-4. **Feasibility**: Realistic assessment of difficulty and resources
-5. **Potential Impact**: What might be learned or achieved
-6. **Commercial Viability**: If applicable, market potential
+1. **Title**: A memorable, evocative name (not corporate-speak!)
+2. **The Weird Concept**: What makes this strange and compelling
+3. **How It Works**: Technical approach (but keep it grounded enough to actually do)
+4. **Why It Matters**: The deeper insight or question this explores
+5. **Vibe Check**: What emotional/aesthetic response does this evoke?
 
-Focus on DIVERSITY. If you notice you're generating similar ideas, pivot to completely different domains.
-Think broadly: embodied AI, programmatic workflows, multi-agent systems, AI in physical spaces,
-AI in social contexts, AI for art, AI for science, unconventional interfaces, etc.
-
-IMPORTANT: Number each idea clearly (1-{NUM_IDEAS}) and separate them distinctly.""",
+Number each idea clearly (1-{NUM_IDEAS}) and make them DISTINCT.""",
         agent=agent,
-        expected_output=f"A detailed list of {NUM_IDEAS} diverse AI experiment ideas, each with title, description, implementation details, feasibility analysis, potential impact, and commercial viability assessment.",
+        expected_output=f"A list of {NUM_IDEAS} genuinely weird and unconventional AI experiment ideas that push creative boundaries.",
+    )
+
+
+def create_amplification_task_1(agent, context) -> Task:
+    """Create the first weirdness amplification task (blinded)."""
+    return Task(
+        description="""You've been given a collection of INITIAL CONCEPT SKETCHES.
+These are rough, first-draft ideas that have potential but need your creative vision.
+
+For EACH concept sketch, create an ENHANCED VERSION that:
+- Removes the boring, predictable parts
+- Amplifies what makes it interesting
+- Adds unexpected elements from other domains
+- Makes it something people will actually remember
+
+Structure your output as:
+
+---
+## Concept N: [Your New Title]
+
+### Initial Sketch
+[Summarize the concept you received]
+
+### Enhanced Version
+[Your transformed, amplified take - make it 10x more interesting]
+
+### What Changed
+[Brief note on what you added/removed to make it better]
+
+---
+
+Transform ALL concepts. Each one has hidden potential - find it.""",
+        agent=agent,
+        context=context,
+        expected_output="A complete list of enhanced concepts, each with the initial sketch, your enhanced version, and notes on the transformation.",
+    )
+
+
+def create_amplification_task_2(agent, context) -> Task:
+    """Create the second weirdness amplification task (also blinded)."""
+    return Task(
+        description="""You've received a batch of PRELIMINARY IDEAS from the ideation team.
+They're okay starting points, but they're playing it way too safe.
+
+Your mission: Take each preliminary idea and CREATE THE UNHINGED VERSION.
+
+For each idea, ask yourself:
+- What if we went 10x further?
+- What would the fever dream version look like?
+- What if we combined this with something completely incompatible?
+- What would make this idea LEGENDARY?
+- What version would people still talk about in 20 years?
+
+Structure your output as:
+
+---
+## Idea N: [Your Bold New Title]
+
+### Preliminary Version
+[The idea as you received it]
+
+### MAXIMUM CHAOS VERSION
+[Your wildest, most unhinged interpretation - remove ALL guardrails]
+
+### The Transformation
+[What pushed this from "interesting" to "unforgettable"?]
+
+---
+
+Do this for EVERY SINGLE IDEA. No exceptions. No playing it safe.
+The goal is to make the preliminary versions look boring by comparison.""",
+        agent=agent,
+        context=context,
+        expected_output="A complete list showing preliminary ideas transformed into their most experimental, memorable, unhinged versions.",
     )
 
 

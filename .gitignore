@@ -27,11 +27,19 @@ wheels/
 # Environment variables
 .env
 
-# Output files
-output/
+# Output files - exclude generated content but keep directory structure
+output/**/*
+!output/.gitkeep
+!output/json/.gitkeep
+!output/pdf/.gitkeep
+!output/markdown/.gitkeep
+
+# Exclude markdown files except documentation
 *.md
 !README.md
 !system-prompt.md
+!QUICKSTART.md
+!MODELS.md
 
 # IDE
 .vscode/
