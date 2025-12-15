@@ -45,8 +45,8 @@ fi
 echo -e "${GREEN}✓ Environment configured${NC}"
 echo ""
 echo "Configuration:"
-echo "  NUM_IDEAS: ${NUM_IDEAS:-50}"
-echo "  GENERATOR_MODEL: ${GENERATOR_MODEL}"
+echo "  NUM_IDEAS: ${NUM_IDEAS:-15}"
+echo "  MODEL: google/gemini-2.5-flash-lite (via OpenRouter)"
 echo "  TEMPERATURE: ${TEMPERATURE:-0.9}"
 echo ""
 

@@ -1,203 +1,247 @@
 #!/usr/bin/env python3
-"""Convert markdown ideation reports to PDF."""
-import argparse
+"""Convert markdown ideation reports to cleanly formatted PDFs."""
+import sys
 import re
-import json
+import argparse
 from pathlib import Path
-from typing import List, Dict
-from src.pdf_generator import generate_ideas_pdf
+
+import markdown
+from weasyprint import HTML, CSS
+
+from src.config import DEFAULT_MODEL
 
 
-def parse_markdown_to_ideas(markdown_content: str) -> List[Dict]:
-    """
-    Parse markdown report to extract structured ideas.
-
-    This is a simple parser that attempts to extract ideas from the
-    markdown format. It looks for numbered ideas with sections.
-    """
-    ideas = []
-
-    # Try to find numbered ideas (e.g., "1. Title" or "# 1: Title")
-    # This is a best-effort parser
-    idea_pattern = r"(?:^|\n)(?:#{1,3}\s*)?(\d+)[:\.\)]\s*(.+?)(?=\n(?:#{1,3}\s*)?\d+[:\.\)]|\Z)"
-
-    matches = re.finditer(idea_pattern, markdown_content, re.DOTALL)
-
-    for match in matches:
-        idea_num = int(match.group(1))
-        idea_content = match.group(2).strip()
-
-        # Extract title (first line)
-        lines = idea_content.split("\n")
-        title = lines[0].strip().strip("*#").strip()
-
-        # Try to extract sections
-        description = ""
-        implementation = ""
-        feasibility = ""
-        potential_impact = ""
-        elevator_pitch = ""
-
-        # Look for section headers
-        section_map = {
-            "description": ["description", "what is it", "overview"],
-            "implementation": ["implementation", "how to build", "technical"],
-            "feasibility": ["feasibility", "difficulty", "resources"],
-            "potential_impact": ["impact", "potential", "value", "outcome"],
-            "elevator_pitch": ["pitch", "summary", "tldr"],
-        }
-
-        current_section = None
-        current_content = []
-
-        for line in lines[1:]:
-            line_lower = line.lower().strip()
-
-            # Check if this is a section header
-            found_section = False
-            for section_key, keywords in section_map.items():
-                if any(keyword in line_lower for keyword in keywords):
-                    # Save previous section
-                    if current_section and current_content:
-                        if current_section == "description":
-                            description = "\n".join(current_content)
-                        elif current_section == "implementation":
-                            implementation = "\n".join(current_content)
-                        elif current_section == "feasibility":
-                            feasibility = "\n".join(current_content)
-                        elif current_section == "potential_impact":
-                            potential_impact = "\n".join(current_content)
-                        elif current_section == "elevator_pitch":
-                            elevator_pitch = "\n".join(current_content)
-
-                    # Start new section
-                    current_section = section_key
-                    current_content = []
-                    found_section = True
-                    break
-
-            if not found_section and current_section:
-                current_content.append(line)
-
-        # Save last section
-        if current_section and current_content:
-            content_str = "\n".join(current_content).strip()
-            if current_section == "description":
-                description = content_str
-            elif current_section == "implementation":
-                implementation = content_str
-            elif current_section == "feasibility":
-                feasibility = content_str
-            elif current_section == "potential_impact":
-                potential_impact = content_str
-            elif current_section == "elevator_pitch":
-                elevator_pitch = content_str
-
-        # If no elevator pitch found, use first sentence of description
-        if not elevator_pitch and description:
-            first_sentence = re.split(r"[.!?]", description)[0]
-            elevator_pitch = first_sentence[:200] if len(first_sentence) > 200 else first_sentence
-
-        idea = {
-            "id": idea_num,
-            "title": title,
-            "elevator_pitch": elevator_pitch or f"AI experiment idea: {title}",
-            "description": description or idea_content,
-            "implementation": implementation,
-            "feasibility": feasibility,
-            "potential_impact": potential_impact,
-        }
-
-        ideas.append(idea)
-
-    return ideas
+def get_model_display_name() -> str:
+    """Get clean model name for display."""
+    model = DEFAULT_MODEL
+    if "/" in model:
+        model = model.split("/")[-1]
+    return model
 
 
-def convert_markdown_to_pdf(markdown_file: Path, output_pdf: Path = None):
-    """Convert a markdown ideation report to PDF."""
-    if not markdown_file.exists():
-        raise FileNotFoundError(f"Markdown file not found: {markdown_file}")
+PDF_CSS = """
+@page {
+    size: letter;
+    margin: 1in 0.75in;
+    @bottom-center {
+        content: "Page " counter(page) " — " """ + f'"{get_model_display_name()}"' + """;
+        font-size: 8pt;
+        color: #666;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+}
 
-    # Read markdown
-    with open(markdown_file, "r") as f:
-        markdown_content = f.read()
+@page :first {
+    @bottom-center { content: none; }
+}
 
-    # Parse ideas from markdown
-    ideas = parse_markdown_to_ideas(markdown_content)
+body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #222;
+    max-width: 100%;
+}
 
-    if not ideas:
-        print("⚠ No ideas found in markdown. Creating PDF from raw content.")
-        ideas = [
-            {
-                "id": 1,
-                "title": "Ideation Report",
-                "elevator_pitch": "Full ideation session output",
-                "description": markdown_content[:5000],  # First 5000 chars
-            }
-        ]
+/* Title page */
+h1:first-of-type {
+    font-size: 28pt;
+    font-weight: 300;
+    text-align: center;
+    margin-top: 2.5in;
+    margin-bottom: 0.5in;
+    color: #111;
+    border: none;
+    page-break-after: always;
+}
 
-    # Determine output path
-    if output_pdf is None:
-        output_pdf = markdown_file.with_suffix(".pdf")
+/* Section headers */
+h2 {
+    font-size: 18pt;
+    font-weight: 600;
+    color: #c0392b;
+    margin-top: 0;
+    margin-bottom: 24pt;
+    padding-top: 0;
+    page-break-before: always;
+    border-bottom: 2pt solid #c0392b;
+    padding-bottom: 8pt;
+}
 
-    # Generate PDF
-    generate_ideas_pdf(ideas, str(output_pdf))
-    return output_pdf
+/* Idea titles */
+h3 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-top: 18pt;
+    margin-bottom: 6pt;
+    page-break-after: avoid;
+}
+
+p {
+    margin-bottom: 10pt;
+    text-align: left;
+    orphans: 3;
+    widows: 3;
+}
+
+/* Bold text for labels */
+strong, b {
+    font-weight: 600;
+    color: #333;
+}
+
+/* Italic for hooks */
+em, i {
+    font-style: italic;
+    color: #555;
+}
+
+/* Horizontal rules - subtle separator, no page break */
+hr {
+    border: none;
+    border-top: 1pt solid #ddd;
+    margin: 20pt 0;
+}
+
+/* Lists */
+ul, ol {
+    margin-left: 18pt;
+    margin-bottom: 10pt;
+    padding-left: 0;
+}
+
+li {
+    margin-bottom: 4pt;
+}
+
+/* Metadata line */
+.meta {
+    font-size: 9pt;
+    color: #888;
+    text-align: center;
+    margin-bottom: 0;
+}
+
+/* Idea blocks */
+.idea-block {
+    margin-bottom: 20pt;
+    page-break-inside: avoid;
+}
+
+/* Hook styling */
+.hook {
+    background: #f8f8f8;
+    padding: 8pt 12pt;
+    border-left: 3pt solid #3498db;
+    margin: 10pt 0;
+    font-style: italic;
+}
+"""
+
+
+def clean_markdown(content: str) -> str:
+    """Clean up markdown content for better PDF rendering."""
+    # Remove any preamble sentences from reviewers
+    content = re.sub(
+        r'^(I will evaluate|I\'ll evaluate|Here are|Okay,|Let me).*?\n\n',
+        '',
+        content,
+        flags=re.MULTILINE | re.IGNORECASE
+    )
+
+    # Convert numbered list items with **Title:** format to h3
+    content = re.sub(
+        r'^\d+\.\s+\*\*(?:Title:?\s*)?\*\*\s*(.+?)$',
+        r'### \1',
+        content,
+        flags=re.MULTILINE
+    )
+
+    # Convert ## N. Title format to ### Title (cleaner hierarchy)
+    content = re.sub(
+        r'^##\s+\d+\.\s+(.+)$',
+        r'### \1',
+        content,
+        flags=re.MULTILINE
+    )
+
+    # Clean up **Hook:** to be on its own styled line
+    content = re.sub(
+        r'\*\*Hook:?\*\*:?\s*',
+        '\n\n**Hook:** ',
+        content
+    )
+
+    # Clean up **The Idea:** and **The Hook:** labels
+    content = re.sub(r'\*\*The Idea\*\*:?\s*', '', content)
+    content = re.sub(r'\*\*The Hook\*\*:?\s*', '\n\n**Hook:** ', content)
+
+    return content
+
+
+def markdown_to_pdf(markdown_path: str, output_path: str = None) -> str:
+    """Convert a markdown file to a cleanly formatted PDF."""
+    md_path = Path(markdown_path)
+
+    if output_path is None:
+        output_path = md_path.with_suffix('.pdf')
+
+    with open(md_path, 'r', encoding='utf-8') as f:
+        md_content = f.read()
+
+    # Clean up the markdown
+    md_content = clean_markdown(md_content)
+
+    # Convert markdown to HTML
+    md = markdown.Markdown(extensions=['extra', 'smarty', 'sane_lists'])
+    html_content = md.convert(md_content)
+
+    html_doc = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Weird AI Experiments</title>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+
+    HTML(string=html_doc).write_pdf(output_path, stylesheets=[CSS(string=PDF_CSS)])
+    print(f"PDF generated: {output_path}")
+    return str(output_path)
+
+
+def convert_latest():
+    """Find and convert the latest markdown file."""
+    md_dir = Path("output/markdown")
+    pdf_dir = Path("output/pdf")
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    files = sorted(md_dir.glob("*.md"), reverse=True)
+
+    if not files:
+        print("No markdown files found in output/markdown")
+        sys.exit(1)
+
+    latest = files[0]
+    print(f"Converting: {latest.name}")
+
+    output = pdf_dir / (latest.stem.replace("_ideas", "") + ".pdf")
+    return markdown_to_pdf(str(latest), str(output))
 
 
 def main():
-    """CLI for converting markdown reports to PDF."""
-    parser = argparse.ArgumentParser(
-        description="Convert markdown ideation reports to PDF"
-    )
-    parser.add_argument("input", type=Path, help="Input markdown file")
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        help="Output PDF file (default: same name as input with .pdf extension)",
-    )
-    parser.add_argument(
-        "--batch",
-        action="store_true",
-        help="Process all .md files in the input directory",
-    )
-
+    parser = argparse.ArgumentParser(description="Convert markdown to PDF")
+    parser.add_argument("input", nargs="?", help="Markdown file (or 'latest')")
+    parser.add_argument("-o", "--output", help="Output PDF path")
     args = parser.parse_args()
 
-    if args.batch:
-        # Process all markdown files in directory
-        if not args.input.is_dir():
-            print(f"❌ Error: {args.input} is not a directory")
-            return
-
-        markdown_files = list(args.input.glob("*.md"))
-        if not markdown_files:
-            print(f"❌ No markdown files found in {args.input}")
-            return
-
-        print(f"📚 Converting {len(markdown_files)} markdown files to PDF...")
-        for md_file in markdown_files:
-            try:
-                pdf_file = md_file.with_suffix(".pdf")
-                print(f"\n  Converting: {md_file.name}")
-                convert_markdown_to_pdf(md_file, pdf_file)
-                print(f"  ✓ Created: {pdf_file.name}")
-            except Exception as e:
-                print(f"  ✗ Error converting {md_file.name}: {e}")
-
+    if args.input is None or args.input == "latest":
+        convert_latest()
     else:
-        # Process single file
-        try:
-            print(f"📄 Converting {args.input} to PDF...")
-            output_pdf = convert_markdown_to_pdf(args.input, args.output)
-            print(f"✓ PDF created: {output_pdf}")
-            print(f"  Size: {output_pdf.stat().st_size / 1024:.2f} KB")
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            import traceback
-
-            traceback.print_exc()
+        markdown_to_pdf(args.input, args.output)
 
 
 if __name__ == "__main__":
